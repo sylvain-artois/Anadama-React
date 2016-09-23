@@ -110,6 +110,25 @@ function anadama_scripts() {
 			'base' => esc_url_raw( home_url() ),
 		),
 	) );
+
+	/* Script d'import */
+	/*wp_enqueue_script(
+		'app',
+		get_template_directory_uri() . '/js/import/import.js',
+		array(),
+		false,
+		true
+	);
+
+	wp_localize_script(
+		'app',
+		'WP_API_Settings',
+		array(
+			'endpoint' => esc_url_raw( get_rest_url( null, '/wp/v2' ) ),
+			'nonce' => wp_create_nonce( 'wp_rest' ),
+			'user' => get_current_user_id()
+		)
+	);*/
 }
 add_action( 'wp_enqueue_scripts', 'anadama_scripts' );
 
@@ -182,3 +201,57 @@ function anadama_jetpack_setup() {
 	add_theme_support( 'site-logo' );
 }
 add_action( 'after_setup_theme', 'anadama_jetpack_setup' );
+
+add_action( 'rest_api_init', function () {
+	register_rest_route( 'cloudinary/v1', '/attachement/(?P<id>\d+)', array(
+		'methods' => 'POST',
+		'callback' => 'post_cloudinary',
+		'args' => array(
+			'post_id' => array(
+				'validate_callback' => function($param, $request, $key) {
+					return is_numeric( $param );
+				}
+			),
+			'attachment_id' => array(
+				'validate_callback' => function($param, $request, $key) {
+					return is_numeric( $param );
+				}
+			),
+			'url' => array(
+				'validate_callback' => function($param, $request, $key) {
+					return is_string( $param );
+				}
+			),
+			'width' => array(
+				'validate_callback' => function($param, $request, $key) {
+					return is_int( $param );
+				}
+			),
+			'height' => array(
+				'validate_callback' => function($param, $request, $key) {
+					return is_int( $param );
+				}
+			),
+		),
+		'permission_callback' => function () {
+			return current_user_can( 'edit_others_posts' );
+		}
+	) );
+} );
+
+function post_cloudinary() {
+	$post_id = $_POST["post_id"];
+	$attachment_id =& $_POST["attachment_id"];
+	$url = $_POST["url"];
+	if (!empty($post_id) && !current_user_can('edit_post', $post_id) ) {
+		$result = array("message" => 'Permission denied.', "error" => TRUE);
+	} else if (!empty($attachment_id) && !current_user_can('edit_post', $attachment_id) ) {
+		$result = array("message" => 'Permission denied.', "error" => TRUE);
+	} else if (empty($url)) {
+		$result = array("message" => 'Missing URL.', "error" => TRUE);
+	} else {
+		$id = $this->register_image($url, $post_id, $attachment_id, NULL, $_POST["width"], $_POST["height"]);
+		$result = array("success"=>TRUE, "attachment_id"=>$id);
+	}
+	echo json_encode($result);
+}
